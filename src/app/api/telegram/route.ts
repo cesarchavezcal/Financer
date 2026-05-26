@@ -87,7 +87,7 @@ export async function POST(req: Request) {
         try {
           const googleProvider = createGoogleGenerativeAI({ apiKey });
           const { text: geminiText } = await generateText({
-            model: googleProvider("gemini-1.5-flash"),
+            model: googleProvider("gemini-2.5-flash"),
             system: "You are a helpful and friendly financial AI assistant. Keep your answers concise, clear, and easy to read on mobile devices.",
             prompt: text,
           });

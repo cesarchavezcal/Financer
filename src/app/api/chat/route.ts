@@ -34,7 +34,7 @@ export async function POST(req: Request) {
       });
     } else if (apiKey && apiKey !== "your_gemini_api_key_here") {
       const googleProvider = createGoogleGenerativeAI({ apiKey });
-      model = googleProvider("gemini-1.5-flash");
+      model = googleProvider("gemini-2.5-flash");
     } else {
       model = new MockLanguageModelV3({
         doStream: async () => {
