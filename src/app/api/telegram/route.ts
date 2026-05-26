@@ -1,3 +1,5 @@
+import { interpretMessage } from "@/lib/interpreter";
+
 export const maxDuration = 30;
 
 export async function GET(req: Request) {
@@ -73,8 +75,11 @@ export async function POST(req: Request) {
       return Response.json({ ok: true, status: "bot_token_missing" });
     }
 
-    // Generate a mock response to demonstrate the Telegram connection
-    const replyText = `🤖 Mock Bot Reply: You sent "${text}". The webhook is active and fully functional!`;
+    // Process through expense tracking middleware
+    const interpreted = interpretMessage(text);
+
+    // Generate response to demonstrate the Telegram connection
+    const replyText = interpreted || `🤖 Mock Bot Reply: You sent "${text}". The webhook is active and fully functional!`;
 
     // Send the reply back to the Telegram chat
     await sendTelegramMessage(botToken, chatId, replyText);
