@@ -1,5 +1,4 @@
-import { google } from "@ai-sdk/google";
-import { openai } from "@ai-sdk/openai";
+import { MockLanguageModelV3 } from "ai/test";
 import { streamText } from "ai";
 
 export const maxDuration = 30;
@@ -7,30 +6,39 @@ export const maxDuration = 30;
 export async function POST(req: Request) {
   try {
     const { messages } = await req.json();
+    const lastMessage = messages[messages.length - 1]?.content || "";
 
-    const geminiApiKey = process.env.GEMINI_API_KEY;
-    const openaiApiKey = process.env.OPENAI_API_KEY;
+    const model = new MockLanguageModelV3({
+      doStream: async () => {
+        const textDelta1 = `Mock Echo: "${lastMessage}"\n\n`;
+        const textDelta2 = `This is a simulated AI response streaming live from your local server using Vercel AI SDK's Mock Language Model. No LLM API keys are required to run this sandbox!`;
 
-    let model;
-
-    if (geminiApiKey && geminiApiKey !== "your_gemini_api_key_here") {
-      model = google("gemini-1.5-flash");
-    } else if (openaiApiKey && openaiApiKey !== "your_openai_api_key_here") {
-      model = openai("gpt-4o-mini");
-    } else {
-      // Fallback to mock text or throw a descriptive error
-      return new Response(
-        JSON.stringify({
-          error: "No API keys configured. Please configure GEMINI_API_KEY or OPENAI_API_KEY in your .env.local file.",
-        }),
-        { status: 500, headers: { "Content-Type": "application/json" } }
-      );
-    }
+        return {
+          stream: new ReadableStream({
+            async start(controller) {
+              controller.enqueue({ type: "text-delta", id: "part-0", delta: textDelta1 });
+              await new Promise((resolve) => setTimeout(resolve, 300));
+              
+              // Stream the rest word by word
+              const words = textDelta2.split(" ");
+              let index = 1;
+              for (const word of words) {
+                controller.enqueue({ type: "text-delta", id: `part-${index++}`, delta: word + " " });
+                await new Promise((resolve) => setTimeout(resolve, 80));
+              }
+              
+              controller.close();
+            },
+          }),
+          rawCall: { rawPrompt: null, rawSettings: {} },
+        };
+      },
+    });
 
     const result = streamText({
       model,
       messages,
-      system: "You are a helpful and friendly financial AI assistant inside Financer. Keep your answers concise, clear, and professional.",
+      system: "You are a helpful financial assistant.",
     });
 
     return result.toUIMessageStreamResponse();

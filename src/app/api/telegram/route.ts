@@ -1,7 +1,3 @@
-import { google } from "@ai-sdk/google";
-import { openai } from "@ai-sdk/openai";
-import { generateText } from "ai";
-
 export const maxDuration = 30;
 
 export async function GET(req: Request) {
@@ -77,27 +73,8 @@ export async function POST(req: Request) {
       return Response.json({ ok: true, status: "bot_token_missing" });
     }
 
-    // Determine model
-    const geminiApiKey = process.env.GEMINI_API_KEY;
-    const openaiApiKey = process.env.OPENAI_API_KEY;
-    let model;
-
-    if (geminiApiKey && geminiApiKey !== "your_gemini_api_key_here") {
-      model = google("gemini-1.5-flash");
-    } else if (openaiApiKey && openaiApiKey !== "your_openai_api_key_here") {
-      model = openai("gpt-4o-mini");
-    } else {
-      // Fallback response if no model is configured
-      await sendTelegramMessage(botToken, chatId, "Sorry, I am currently misconfigured (missing LLM API keys). Please configure GEMINI_API_KEY or OPENAI_API_KEY.");
-      return Response.json({ ok: true, status: "api_key_missing" });
-    }
-
-    // Run AI SDK text generation
-    const { text: replyText } = await generateText({
-      model,
-      system: "You are a helpful and friendly financial AI assistant inside Telegram. Keep your answers concise, clear, and easy to read on mobile devices.",
-      prompt: text,
-    });
+    // Generate a mock response to demonstrate the Telegram connection
+    const replyText = `🤖 Mock Bot Reply: You sent "${text}". The webhook is active and fully functional!`;
 
     // Send the reply back to the Telegram chat
     await sendTelegramMessage(botToken, chatId, replyText);
