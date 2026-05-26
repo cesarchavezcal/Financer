@@ -14,7 +14,6 @@ export const TransactionSchema = z.object({
   category: z.enum(YNAB_CATEGORIES).describe("Select the most appropriate YNAB main category from the allowed list"),
   subCategory: z.enum(YNAB_SUBCATEGORIES).describe("Select the most appropriate YNAB subcategory from the allowed list"),
   product: z.string().describe("The specific item, account, or service (e.g. '🍎 manzanas', '💼 salario', '🏦 ahorros')"),
-  quantity: z.number().describe("The quantity purchased (default is 1 if not specified)"),
   date: z.string().describe("The date of the transaction in YYYY-MM-DD format."),
 });
 
@@ -27,16 +26,11 @@ export const MultiTransactionSchema = z.object({
 export type Transaction = z.infer<typeof TransactionSchema>;
 
 /**
- * Utility to extract amount and quantity from a single line locally.
+ * Utility to extract amount from a single line locally.
  */
-function extractAmountAndQuantity(text: string): { amount: number; quantity: number } {
+function extractAmount(text: string): number {
   const amountMatch = text.match(/\$?(\d+(?:\.\d{2})?)/);
-  const amount = amountMatch ? parseFloat(amountMatch[1]) : 0;
-
-  const qtyMatch = text.match(/(?:x\s*|cant:\s*|cantidad:\s*)?(\d+)\s+(?:manzana|cafe|uber|luz|taco)/i) || text.match(/(\d+)\s+unidad/i);
-  const quantity = qtyMatch ? parseInt(qtyMatch[1]) : 1;
-
-  return { amount, quantity };
+  return amountMatch ? parseFloat(amountMatch[1]) : 0;
 }
 
 /**
@@ -54,8 +48,8 @@ function parseLineLocally(line: string, today: string): Transaction | null {
     const type = isIncomeCmd ? "income" : "transfer";
     const textWithoutCommand = cleanLine.replace(/^\/(income|transfer)\s*/i, "").trim();
 
-    // Extract amount and quantity
-    const { amount, quantity } = extractAmountAndQuantity(textWithoutCommand);
+    // Extract amount
+    const amount = extractAmount(textWithoutCommand);
     // Extract description (remove the amount from the text)
     const product = textWithoutCommand.replace(/\$?(\d+(?:\.\d{2})?)/, "").trim() || (isIncomeCmd ? "Ingreso" : "Transferencia");
 
@@ -65,7 +59,6 @@ function parseLineLocally(line: string, today: string): Transaction | null {
       category: isIncomeCmd ? "📈 Income" : "💸 Debt Payments",
       subCategory: isIncomeCmd ? "🪙 Other Income" : "💸 Transfer to/from Account",
       product: product,
-      quantity,
       date: today,
     };
   }
@@ -74,14 +67,13 @@ function parseLineLocally(line: string, today: string): Transaction | null {
   const lowercaseLine = cleanLine.toLowerCase();
   for (const [keyword, data] of Object.entries(KEYWORD_MAP)) {
     if (lowercaseLine.includes(keyword)) {
-      const { amount, quantity } = extractAmountAndQuantity(cleanLine);
+      const amount = extractAmount(cleanLine);
       return {
         type: data.type,
         amount,
         category: data.category,
         subCategory: data.subCategory,
         product: data.product,
-        quantity,
         date: today,
       };
     }
@@ -127,14 +119,13 @@ export async function classifyTransaction(text: string): Promise<{ isTransaction
   if (!apiKey || apiKey === "your_gemini_api_key_here") {
     console.warn("Using mock classification because Gemini API Key is missing.");
     const mockTransactions = unresolvedLines.map(line => {
-      const { amount, quantity } = extractAmountAndQuantity(line);
+      const amount = extractAmount(line);
       return {
         type: "expense" as const,
         amount: amount || 10,
         category: "💳 Immediate Obligations" as const,
         subCategory: "🛒 Groceries" as const,
         product: line.replace(/\d+/g, "").trim() || "Grocery Item",
-        quantity: quantity,
         date: today,
       };
     });
@@ -168,14 +159,13 @@ ${promptText}`,
     console.error("Error in batch classifyTransaction:", error);
     // Return local matches if any, plus fallback for failed lines
     const failedTransactions = unresolvedLines.map(line => {
-      const { amount, quantity } = extractAmountAndQuantity(line);
+      const amount = extractAmount(line);
       return {
         type: "expense" as const,
         amount,
         category: "💳 Immediate Obligations" as const,
         subCategory: "🛒 Groceries" as const,
         product: `❓ ${line}`,
-        quantity,
         date: today,
       };
     });
