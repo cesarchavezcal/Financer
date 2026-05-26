@@ -7,13 +7,13 @@ import {
   KEYWORD_MAP 
 } from "./categories";
 
-// Schema for a single transaction
+// Schema for a single transaction supporting expense, income, and transfers
 export const TransactionSchema = z.object({
-  type: z.enum(["expense", "income"]).describe("Whether this is an expense (gasto) or income (ingreso)"),
+  type: z.enum(["expense", "income", "transfer"]).describe("Whether this is an expense (gasto), income (ingreso), or transfer (transferencia)"),
   amount: z.number().describe("The monetary value of the transaction"),
   category: z.enum(YNAB_CATEGORIES).describe("Select the most appropriate YNAB main category from the allowed list"),
   subCategory: z.enum(YNAB_SUBCATEGORIES).describe("Select the most appropriate YNAB subcategory from the allowed list"),
-  product: z.string().describe("The specific item or service (e.g. '🍎 manzanas', '☕ café')"),
+  product: z.string().describe("The specific item, account, or service (e.g. '🍎 manzanas', '💼 salario', '🏦 ahorros')"),
   quantity: z.number().describe("The quantity purchased (default is 1 if not specified)"),
   date: z.string().describe("The date of the transaction in YYYY-MM-DD format."),
 });
@@ -40,15 +40,41 @@ function extractAmountAndQuantity(text: string): { amount: number; quantity: num
 }
 
 /**
- * Parses a single line locally using the static keyword map.
+ * Parses a single line locally using the static keyword map or slash commands.
  */
 function parseLineLocally(line: string, today: string): Transaction | null {
-  const lowercaseLine = line.toLowerCase().trim();
-  if (!lowercaseLine) return null;
+  const cleanLine = line.trim();
+  if (!cleanLine) return null;
 
+  // Check if it is a command prefix
+  const isIncomeCmd = cleanLine.toLowerCase().startsWith("/income");
+  const isTransferCmd = cleanLine.toLowerCase().startsWith("/transfer");
+
+  if (isIncomeCmd || isTransferCmd) {
+    const type = isIncomeCmd ? "income" : "transfer";
+    const textWithoutCommand = cleanLine.replace(/^\/(income|transfer)\s*/i, "").trim();
+
+    // Extract amount and quantity
+    const { amount, quantity } = extractAmountAndQuantity(textWithoutCommand);
+    // Extract description (remove the amount from the text)
+    const product = textWithoutCommand.replace(/\$?(\d+(?:\.\d{2})?)/, "").trim() || (isIncomeCmd ? "Ingreso" : "Transferencia");
+
+    return {
+      type,
+      amount,
+      category: isIncomeCmd ? "📈 Income" : "💸 Debt Payments",
+      subCategory: isIncomeCmd ? "🪙 Other Income" : "💸 Transfer to/from Account",
+      product: product,
+      quantity,
+      date: today,
+    };
+  }
+
+  // Fallback to keyword dictionary matching
+  const lowercaseLine = cleanLine.toLowerCase();
   for (const [keyword, data] of Object.entries(KEYWORD_MAP)) {
     if (lowercaseLine.includes(keyword)) {
-      const { amount, quantity } = extractAmountAndQuantity(line);
+      const { amount, quantity } = extractAmountAndQuantity(cleanLine);
       return {
         type: data.type,
         amount,
@@ -75,7 +101,7 @@ export async function classifyTransaction(text: string): Promise<{ isTransaction
   const localTransactions: Transaction[] = [];
   const unresolvedLines: string[] = [];
 
-  // 1. Process each line locally first
+  // 1. Process each line locally first (handles /income, /transfer commands & keywords)
   for (const line of lines) {
     const localMatch = parseLineLocally(line, today);
     if (localMatch) {
@@ -94,6 +120,9 @@ export async function classifyTransaction(text: string): Promise<{ isTransaction
     };
   }
 
+  // Determine if it looks like a transaction for mock fallback
+  const isMockTransaction = text.toLowerCase().includes("manzana") || text.toLowerCase().includes("$") || /\d/.test(text) || text.startsWith("/");
+
   // 2. Fallback Mock response if API key is missing
   if (!apiKey || apiKey === "your_gemini_api_key_here") {
     console.warn("Using mock classification because Gemini API Key is missing.");
@@ -111,7 +140,7 @@ export async function classifyTransaction(text: string): Promise<{ isTransaction
     });
 
     return {
-      isTransaction: true,
+      isTransaction: isMockTransaction || localTransactions.length > 0,
       transactions: [...localTransactions, ...mockTransactions],
     };
   }
@@ -124,7 +153,7 @@ export async function classifyTransaction(text: string): Promise<{ isTransaction
     const { object } = await generateObject({
       model: googleProvider("gemini-2.5-flash"),
       schema: MultiTransactionSchema,
-      prompt: `Analyze the following lines. Each line represents a separate transaction. Extract the transaction details for each line and map them to YNAB categories.
+      prompt: `Analyze the following lines. Each line represents a separate transaction. Extract the transaction details for each line (expense, income, or transfer) and map them to YNAB categories.
 Today's date is: ${today}.
 
 Lines to analyze:

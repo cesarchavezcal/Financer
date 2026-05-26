@@ -31,6 +31,7 @@ export const YNAB_SUBCATEGORIES = [
   "💳 Credit Card Payment",
   "🚗 Auto Loan",
   "🎓 Student Loan",
+  "💸 Transfer to/from Account",
   
   // Quality of Life
   "✈️ Vacation / Travel",
@@ -49,7 +50,7 @@ export type YnabCategory = typeof YNAB_CATEGORIES[number];
 export type YnabSubcategory = typeof YNAB_SUBCATEGORIES[number];
 
 export interface PredefinedTransaction {
-  type: "expense" | "income";
+  type: "expense" | "income" | "transfer";
   category: YnabCategory;
   subCategory: YnabSubcategory;
   product: string;
