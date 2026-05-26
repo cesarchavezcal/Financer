@@ -1,6 +1,7 @@
 import { interpretMessage } from "@/lib/interpreter";
 import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { generateText } from "ai";
+import { classifyTransaction } from "@/lib/classifier";
 
 export const maxDuration = 30;
 
@@ -77,11 +78,21 @@ export async function POST(req: Request) {
       return Response.json({ ok: true, status: "bot_token_missing" });
     }
 
-    // Process through expense tracking middleware
-    const interpreted = interpretMessage(text);
-    let replyText = interpreted;
+    // Run the classification LLM middleware
+    const classification = await classifyTransaction(text);
+    let replyText = "";
 
-    if (!replyText) {
+    if (classification.isTransaction) {
+      const cleanJson = {
+        category: classification.category,
+        subCategory: classification.subCategory,
+        product: classification.product,
+        quantity: classification.quantity,
+        date: classification.date,
+      };
+      replyText = `✅ **Transaction Classified!**\n\n\`\`\`json\n${JSON.stringify(cleanJson, null, 2)}\n\`\`\``;
+    } else {
+      // Fallback to conversational response
       const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_GENERATIVE_AI_API_KEY;
       if (apiKey && apiKey !== "your_gemini_api_key_here") {
         try {

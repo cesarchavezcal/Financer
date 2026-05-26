@@ -1,7 +1,7 @@
 import { MockLanguageModelV3 } from "ai/test";
 import { streamText } from "ai";
-import { interpretMessage } from "@/lib/interpreter";
 import { createGoogleGenerativeAI } from "@ai-sdk/google";
+import { classifyTransaction } from "@/lib/classifier";
 
 export const maxDuration = 30;
 
@@ -9,18 +9,28 @@ export async function POST(req: Request) {
   try {
     const { messages } = await req.json();
     const lastMessage = messages[messages.length - 1]?.content || "";
-
-    const interpreted = interpretMessage(lastMessage);
     const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_GENERATIVE_AI_API_KEY;
 
     let model;
 
-    if (interpreted) {
+    // Run the classification LLM middleware
+    const classification = await classifyTransaction(lastMessage);
+
+    if (classification.isTransaction) {
+      const cleanJson = {
+        category: classification.category,
+        subCategory: classification.subCategory,
+        product: classification.product,
+        quantity: classification.quantity,
+        date: classification.date,
+      };
+      const responseText = `✅ **Transaction Classified!**\n\n\`\`\`json\n${JSON.stringify(cleanJson, null, 2)}\n\`\`\``;
+
       model = new MockLanguageModelV3({
         doStream: async () => ({
           stream: new ReadableStream({
             async start(controller) {
-              const words = interpreted.split(" ");
+              const words = responseText.split(" ");
               let index = 0;
               for (const word of words) {
                 controller.enqueue({ type: "text-delta", id: `part-${index++}`, delta: word + " " });
