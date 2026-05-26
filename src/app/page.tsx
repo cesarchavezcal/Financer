@@ -117,7 +117,7 @@ export default function Home() {
             <span>🤖</span> Telegram Bot Integration
           </h2>
           <p className={styles.cardDescription}>
-            Follow these steps to connect this Vercel AI SDK backend to your live Telegram bot.
+            Follow these steps to connect this Vercel AI SDK backend to your live Telegram bot. Try sending <code>$5 manzanas</code> to see structured expense classification!
           </p>
 
           <ol className={styles.stepsList}>
