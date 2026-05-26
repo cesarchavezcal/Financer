@@ -1,8 +1,4 @@
-import { interpretMessage } from "../../../lib/interpreter";
-import { createGoogleGenerativeAI } from "@ai-sdk/google";
-import { generateText } from "ai";
-import { classifyTransaction } from "../../../lib/classifier";
-import { insertMovements } from "../../../lib/supabase";
+import { bot } from "../../../lib/bot";
 
 export const maxDuration = 30;
 
@@ -49,82 +45,10 @@ export async function GET(req: Request) {
 
 export async function POST(req: Request) {
   try {
-    // Optional: verify Telegram secret token to prevent unauthorized access
-    const secretHeader = req.headers.get("x-telegram-bot-api-secret-token");
-    const configuredSecret = process.env.TELEGRAM_WEBHOOK_SECRET;
-
-    if (configuredSecret && configuredSecret !== "your_telegram_webhook_secret_here" && secretHeader !== configuredSecret) {
-      return new Response("Unauthorized", { status: 403 });
-    }
-
-    const body = await req.json();
-    console.log("Telegram webhook payload:", JSON.stringify(body));
-
-    // Telegram sends updates. We care about the 'message' object.
-    const message = body.message;
-    if (!message || !message.chat || !message.chat.id) {
-      return Response.json({ ok: true, status: "ignored_no_message" });
-    }
-
-    const chatId = message.chat.id;
-    const text = message.text;
-
-    if (!text) {
-      return Response.json({ ok: true, status: "ignored_no_text" });
-    }
-
-    const botToken = process.env.TELEGRAM_BOT_TOKEN;
-    if (!botToken || botToken === "your_telegram_bot_token_here") {
-      console.error("TELEGRAM_BOT_TOKEN not configured");
-      return Response.json({ ok: true, status: "bot_token_missing" });
-    }
-
-    // Run the classification LLM middleware
-    const classification = await classifyTransaction(text);
-
-    // Save transactions to Supabase DB if any were parsed
-    if (classification.isTransaction && classification.transactions.length > 0) {
-      await insertMovements(classification.transactions, {
-        chatId: String(chatId),
-        rawMessage: text,
-      });
-    }
-
-    let replyText = "";
-
-    if (classification.isTransaction) {
-      replyText = `✅ **${classification.transactions.length} Transactions Classified!**\n\n\`\`\`json\n${JSON.stringify(classification.transactions, null, 2)}\n\`\`\``;
-    } else {
-      replyText = `⚠️ Lo siento, solo puedo procesar y registrar transacciones financieras. Por favor envía mensajes como "Jitomate 5" o "Gaste $10 en gasolina".`;
-    }
-
-    // Send the reply back to the Telegram chat
-    await sendTelegramMessage(botToken, chatId, replyText);
-
-    return Response.json({ ok: true });
+    return await bot.webhooks.telegram(req);
   } catch (error: any) {
     console.error("Telegram Webhook Error:", error);
-    // Always return 200 to Telegram so it doesn't keep retrying failed messages indefinitely
+    // Return 200 OK so Telegram doesn't retry failed webhook deliveries indefinitely
     return Response.json({ ok: false, error: error.message }, { status: 200 });
-  }
-}
-
-async function sendTelegramMessage(botToken: string, chatId: number, text: string) {
-  const url = `https://api.telegram.org/bot${botToken}/sendMessage`;
-  const response = await fetch(url, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      chat_id: chatId,
-      text: text,
-    }),
-  });
-
-  if (!response.ok) {
-    const errText = await response.text();
-    console.error("Failed to send Telegram message:", errText);
-    throw new Error(`Telegram SendMessage Error: ${response.status} - ${errText}`);
   }
 }
