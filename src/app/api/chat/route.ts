@@ -1,7 +1,7 @@
 import { MockLanguageModelV3 } from "ai/test";
 import { streamText } from "ai";
 import { interpretMessage } from "@/lib/interpreter";
-import { google } from "@ai-sdk/google";
+import { createGoogleGenerativeAI } from "@ai-sdk/google";
 
 export const maxDuration = 30;
 
@@ -11,7 +11,7 @@ export async function POST(req: Request) {
     const lastMessage = messages[messages.length - 1]?.content || "";
 
     const interpreted = interpretMessage(lastMessage);
-    const geminiApiKey = process.env.GEMINI_API_KEY;
+    const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_GENERATIVE_AI_API_KEY;
 
     let model;
 
@@ -32,8 +32,9 @@ export async function POST(req: Request) {
           rawCall: { rawPrompt: null, rawSettings: {} },
         }),
       });
-    } else if (geminiApiKey && geminiApiKey !== "your_gemini_api_key_here") {
-      model = google("gemini-1.5-flash");
+    } else if (apiKey && apiKey !== "your_gemini_api_key_here") {
+      const googleProvider = createGoogleGenerativeAI({ apiKey });
+      model = googleProvider("gemini-1.5-flash");
     } else {
       model = new MockLanguageModelV3({
         doStream: async () => {
