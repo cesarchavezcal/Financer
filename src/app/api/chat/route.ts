@@ -1,6 +1,7 @@
 import { MockLanguageModelV3 } from "ai/test";
 import { streamText } from "ai";
 import { interpretMessage } from "@/lib/interpreter";
+import { google } from "@ai-sdk/google";
 
 export const maxDuration = 30;
 
@@ -10,17 +11,16 @@ export async function POST(req: Request) {
     const lastMessage = messages[messages.length - 1]?.content || "";
 
     const interpreted = interpretMessage(lastMessage);
+    const geminiApiKey = process.env.GEMINI_API_KEY;
 
-    const model = new MockLanguageModelV3({
-      doStream: async () => {
-        const textDelta = interpreted 
-          ? interpreted 
-          : `Mock Echo: "${lastMessage}"\n\nThis is a simulated AI response streaming live from your local server using Vercel AI SDK's Mock Language Model. No LLM API keys are required to run this sandbox!`;
+    let model;
 
-        return {
+    if (interpreted) {
+      model = new MockLanguageModelV3({
+        doStream: async () => ({
           stream: new ReadableStream({
             async start(controller) {
-              const words = textDelta.split(" ");
+              const words = interpreted.split(" ");
               let index = 0;
               for (const word of words) {
                 controller.enqueue({ type: "text-delta", id: `part-${index++}`, delta: word + " " });
@@ -30,9 +30,31 @@ export async function POST(req: Request) {
             },
           }),
           rawCall: { rawPrompt: null, rawSettings: {} },
-        };
-      },
-    });
+        }),
+      });
+    } else if (geminiApiKey && geminiApiKey !== "your_gemini_api_key_here") {
+      model = google("gemini-1.5-flash");
+    } else {
+      model = new MockLanguageModelV3({
+        doStream: async () => {
+          const textDelta = `Mock Echo: "${lastMessage}"\n\nThis is a simulated AI response streaming live from your local server using Vercel AI SDK's Mock Language Model. No LLM API keys are required to run this sandbox!`;
+          return {
+            stream: new ReadableStream({
+              async start(controller) {
+                const words = textDelta.split(" ");
+                let index = 0;
+                for (const word of words) {
+                  controller.enqueue({ type: "text-delta", id: `part-${index++}`, delta: word + " " });
+                  await new Promise((resolve) => setTimeout(resolve, 80));
+                }
+                controller.close();
+              },
+            }),
+            rawCall: { rawPrompt: null, rawSettings: {} },
+          };
+        },
+      });
+    }
 
     const result = streamText({
       model,

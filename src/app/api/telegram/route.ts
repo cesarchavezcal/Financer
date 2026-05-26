@@ -1,4 +1,6 @@
 import { interpretMessage } from "@/lib/interpreter";
+import { google } from "@ai-sdk/google";
+import { generateText } from "ai";
 
 export const maxDuration = 30;
 
@@ -77,9 +79,26 @@ export async function POST(req: Request) {
 
     // Process through expense tracking middleware
     const interpreted = interpretMessage(text);
+    let replyText = interpreted;
 
-    // Generate response to demonstrate the Telegram connection
-    const replyText = interpreted || `🤖 Mock Bot Reply: You sent "${text}". The webhook is active and fully functional!`;
+    if (!replyText) {
+      const geminiApiKey = process.env.GEMINI_API_KEY;
+      if (geminiApiKey && geminiApiKey !== "your_gemini_api_key_here") {
+        try {
+          const { text: geminiText } = await generateText({
+            model: google("gemini-1.5-flash"),
+            system: "You are a helpful and friendly financial AI assistant. Keep your answers concise, clear, and easy to read on mobile devices.",
+            prompt: text,
+          });
+          replyText = geminiText;
+        } catch (err: any) {
+          console.error("Gemini Generation Error:", err);
+          replyText = `⚠️ Error calling Gemini API: ${err.message || err}`;
+        }
+      } else {
+        replyText = `🤖 Mock Bot Reply: You sent "${text}". Webhook is functional, but GEMINI_API_KEY is not set on Vercel yet!`;
+      }
+    }
 
     // Send the reply back to the Telegram chat
     await sendTelegramMessage(botToken, chatId, replyText);
