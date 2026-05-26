@@ -2,6 +2,7 @@ import { interpretMessage } from "../../../lib/interpreter";
 import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { generateText } from "ai";
 import { classifyTransaction } from "../../../lib/classifier";
+import { insertMovements } from "../../../lib/supabase";
 
 export const maxDuration = 30;
 
@@ -80,6 +81,15 @@ export async function POST(req: Request) {
 
     // Run the classification LLM middleware
     const classification = await classifyTransaction(text);
+
+    // Save transactions to Supabase DB if any were parsed
+    if (classification.isTransaction && classification.transactions.length > 0) {
+      await insertMovements(classification.transactions, {
+        chatId: String(chatId),
+        rawMessage: text,
+      });
+    }
+
     let replyText = "";
 
     if (classification.isTransaction) {
