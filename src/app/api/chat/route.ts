@@ -17,14 +17,7 @@ export async function POST(req: Request) {
     const classification = await classifyTransaction(lastMessage);
 
     if (classification.isTransaction) {
-      const cleanJson = {
-        category: classification.category,
-        subCategory: classification.subCategory,
-        product: classification.product,
-        quantity: classification.quantity,
-        date: classification.date,
-      };
-      const responseText = `✅ **Transaction Classified!**\n\n\`\`\`json\n${JSON.stringify(cleanJson, null, 2)}\n\`\`\``;
+      const responseText = `✅ **${classification.transactions.length} Transactions Classified!**\n\n\`\`\`json\n${JSON.stringify(classification.transactions, null, 2)}\n\`\`\``;
 
       model = new MockLanguageModelV3({
         doStream: async () => ({

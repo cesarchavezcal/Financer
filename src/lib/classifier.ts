@@ -4,34 +4,35 @@ import { z } from "zod";
 import { 
   YNAB_CATEGORIES, 
   YNAB_SUBCATEGORIES, 
-  KEYWORD_MAP, 
-  YnabCategory, 
-  YnabSubcategory 
+  KEYWORD_MAP 
 } from "./categories";
 
-// Define the transaction schema using YNAB enums
+// Schema for a single transaction
 export const TransactionSchema = z.object({
-  isTransaction: z.boolean().describe("Whether this message is a financial transaction (expense/income) or just general chat"),
   type: z.enum(["expense", "income"]).describe("Whether this is an expense (gasto) or income (ingreso)"),
   amount: z.number().describe("The monetary value of the transaction"),
-  category: z.enum(YNAB_CATEGORIES).describe("Select the most appropriate YNAB main category from the allowed enum list"),
-  subCategory: z.enum(YNAB_SUBCATEGORIES).describe("Select the most appropriate YNAB subcategory from the allowed enum list"),
+  category: z.enum(YNAB_CATEGORIES).describe("Select the most appropriate YNAB main category from the allowed list"),
+  subCategory: z.enum(YNAB_SUBCATEGORIES).describe("Select the most appropriate YNAB subcategory from the allowed list"),
   product: z.string().describe("The specific item or service (e.g. '🍎 manzanas', '☕ café')"),
   quantity: z.number().describe("The quantity purchased (default is 1 if not specified)"),
-  date: z.string().describe("The date of the transaction in YYYY-MM-DD format. If not specified, default to today's date."),
+  date: z.string().describe("The date of the transaction in YYYY-MM-DD format."),
+});
+
+// Schema for multiple transactions parsed at once
+export const MultiTransactionSchema = z.object({
+  isTransaction: z.boolean().describe("Whether any transactions were successfully parsed from the message"),
+  transactions: z.array(TransactionSchema).describe("List of parsed financial transactions"),
 });
 
 export type Transaction = z.infer<typeof TransactionSchema>;
 
 /**
- * Utility to extract amount and quantity from a text locally.
+ * Utility to extract amount and quantity from a single line locally.
  */
 function extractAmountAndQuantity(text: string): { amount: number; quantity: number } {
-  // Extract amount (first number matching decimals or digits)
   const amountMatch = text.match(/\$?(\d+(?:\.\d{2})?)/);
   const amount = amountMatch ? parseFloat(amountMatch[1]) : 0;
 
-  // Extract quantity (looking for x3, 3 units, or a leading quantity like "3 cafes")
   const qtyMatch = text.match(/(?:x\s*|cant:\s*|cantidad:\s*)?(\d+)\s+(?:manzana|cafe|uber|luz|taco)/i) || text.match(/(\d+)\s+unidad/i);
   const quantity = qtyMatch ? parseInt(qtyMatch[1]) : 1;
 
@@ -39,21 +40,16 @@ function extractAmountAndQuantity(text: string): { amount: number; quantity: num
 }
 
 /**
- * Classifies an incoming message into a structured financial transaction.
- * First checks the local keyword map (0 tokens cost). Falls back to Google Gemini if not found.
+ * Parses a single line locally using the static keyword map.
  */
-export async function classifyTransaction(text: string): Promise<Transaction> {
-  const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_GENERATIVE_AI_API_KEY;
-  const today = new Date().toISOString().split("T")[0];
+function parseLineLocally(line: string, today: string): Transaction | null {
+  const lowercaseLine = line.toLowerCase().trim();
+  if (!lowercaseLine) return null;
 
-  // 1. LOCAL BYPASS: Scan for static keyword matches to save tokens
-  const lowercaseText = text.toLowerCase();
   for (const [keyword, data] of Object.entries(KEYWORD_MAP)) {
-    if (lowercaseText.includes(keyword)) {
-      const { amount, quantity } = extractAmountAndQuantity(text);
-      console.log(`[Local Match] Matched keyword "${keyword}". Cost: 0 tokens.`);
+    if (lowercaseLine.includes(keyword)) {
+      const { amount, quantity } = extractAmountAndQuantity(line);
       return {
-        isTransaction: true,
         type: data.type,
         amount,
         category: data.category,
@@ -64,50 +60,100 @@ export async function classifyTransaction(text: string): Promise<Transaction> {
       };
     }
   }
+  return null;
+}
 
-  // Determine if it looks like a transaction for the mock fallback
-  const isMockTransaction = text.toLowerCase().includes("manzana") || text.toLowerCase().includes("$") || /\d/.test(text);
+/**
+ * Classifies an incoming message containing one or more lines into structured YNAB transactions.
+ * Uses a hybrid approach: local parsing per-line where possible, and batch LLM parsing for the rest.
+ */
+export async function classifyTransaction(text: string): Promise<{ isTransaction: boolean; transactions: Transaction[] }> {
+  const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_GENERATIVE_AI_API_KEY;
+  const today = new Date().toISOString().split("T")[0];
 
-  // 2. MOCK FALLBACK (If no API Key configured)
-  if (!apiKey || apiKey === "your_gemini_api_key_here") {
-    console.warn("Using mock classification because Gemini API Key is missing.");
+  const lines = text.split("\n").map(l => l.trim()).filter(Boolean);
+  const localTransactions: Transaction[] = [];
+  const unresolvedLines: string[] = [];
+
+  // 1. Process each line locally first
+  for (const line of lines) {
+    const localMatch = parseLineLocally(line, today);
+    if (localMatch) {
+      localTransactions.push(localMatch);
+    } else {
+      unresolvedLines.push(line);
+    }
+  }
+
+  // If everything was parsed locally, return immediately (0 tokens cost)
+  if (unresolvedLines.length === 0) {
+    console.log(`[Local Match] Parsed ${localTransactions.length} lines locally. Cost: 0 tokens.`);
     return {
-      isTransaction: isMockTransaction,
-      type: "expense",
-      amount: 5,
-      category: "💳 Immediate Obligations",
-      subCategory: "🛒 Groceries",
-      product: "🍎 Manzanas",
-      quantity: 1,
-      date: today,
+      isTransaction: localTransactions.length > 0,
+      transactions: localTransactions,
     };
   }
 
-  // 3. LLM CLASSIFICATION (Calls Gemini with YNAB constraints)
-  try {
-    const googleProvider = createGoogleGenerativeAI({ apiKey });
-    const { object } = await generateObject({
-      model: googleProvider("gemini-2.5-flash"),
-      schema: TransactionSchema,
-      prompt: `Analyze the following user message. If it is a financial transaction (expense/income), extract it and map it to the YNAB categories.
-Today's date is: ${today}.
-
-Message: "${text}"`,
+  // 2. Fallback Mock response if API key is missing
+  if (!apiKey || apiKey === "your_gemini_api_key_here") {
+    console.warn("Using mock classification because Gemini API Key is missing.");
+    const mockTransactions = unresolvedLines.map(line => {
+      const { amount, quantity } = extractAmountAndQuantity(line);
+      return {
+        type: "expense" as const,
+        amount: amount || 10,
+        category: "💳 Immediate Obligations" as const,
+        subCategory: "🛒 Groceries" as const,
+        product: line.replace(/\d+/g, "").trim() || "Grocery Item",
+        quantity: quantity,
+        date: today,
+      };
     });
 
-    return object;
-  } catch (error) {
-    console.error("Error in classifyTransaction:", error);
-    // Return fallback transaction if LLM classification fails
     return {
       isTransaction: true,
-      type: "expense",
-      amount: 0,
-      category: "💳 Immediate Obligations", // Fallback to safe standard category
-      subCategory: "🛒 Groceries",
-      product: `❓ ${text}`,
-      quantity: 1,
-      date: today,
+      transactions: [...localTransactions, ...mockTransactions],
+    };
+  }
+
+  // 3. Batch LLM parsing for unresolved lines
+  try {
+    const googleProvider = createGoogleGenerativeAI({ apiKey });
+    const promptText = unresolvedLines.join("\n");
+
+    const { object } = await generateObject({
+      model: googleProvider("gemini-2.5-flash"),
+      schema: MultiTransactionSchema,
+      prompt: `Analyze the following lines. Each line represents a separate transaction. Extract the transaction details for each line and map them to YNAB categories.
+Today's date is: ${today}.
+
+Lines to analyze:
+${promptText}`,
+    });
+
+    return {
+      isTransaction: object.isTransaction || localTransactions.length > 0,
+      transactions: [...localTransactions, ...object.transactions],
+    };
+  } catch (error) {
+    console.error("Error in batch classifyTransaction:", error);
+    // Return local matches if any, plus fallback for failed lines
+    const failedTransactions = unresolvedLines.map(line => {
+      const { amount, quantity } = extractAmountAndQuantity(line);
+      return {
+        type: "expense" as const,
+        amount,
+        category: "💳 Immediate Obligations" as const,
+        subCategory: "🛒 Groceries" as const,
+        product: `❓ ${line}`,
+        quantity,
+        date: today,
+      };
+    });
+
+    return {
+      isTransaction: localTransactions.length > 0 || failedTransactions.length > 0,
+      transactions: [...localTransactions, ...failedTransactions],
     };
   }
 }
