@@ -1,7 +1,7 @@
-import { interpretMessage } from "@/lib/interpreter";
+import { interpretMessage } from "../../../lib/interpreter";
 import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { generateText } from "ai";
-import { classifyTransaction } from "@/lib/classifier";
+import { classifyTransaction } from "../../../lib/classifier";
 
 export const maxDuration = 30;
 

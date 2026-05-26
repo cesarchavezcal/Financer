@@ -1,7 +1,7 @@
 import { MockLanguageModelV3 } from "ai/test";
 import { streamText } from "ai";
 import { createGoogleGenerativeAI } from "@ai-sdk/google";
-import { classifyTransaction } from "@/lib/classifier";
+import { classifyTransaction } from "../../../lib/classifier";
 
 export const maxDuration = 30;
 
