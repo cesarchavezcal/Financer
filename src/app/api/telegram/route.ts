@@ -85,24 +85,7 @@ export async function POST(req: Request) {
     if (classification.isTransaction) {
       replyText = `✅ **${classification.transactions.length} Transactions Classified!**\n\n\`\`\`json\n${JSON.stringify(classification.transactions, null, 2)}\n\`\`\``;
     } else {
-      // Fallback to conversational response
-      const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_GENERATIVE_AI_API_KEY;
-      if (apiKey && apiKey !== "your_gemini_api_key_here") {
-        try {
-          const googleProvider = createGoogleGenerativeAI({ apiKey });
-          const { text: geminiText } = await generateText({
-            model: googleProvider("gemini-2.5-flash"),
-            system: "You are a helpful and friendly financial AI assistant. Keep your answers concise, clear, and easy to read on mobile devices.",
-            prompt: text,
-          });
-          replyText = geminiText;
-        } catch (err: any) {
-          console.error("Gemini Generation Error:", err);
-          replyText = `⚠️ Error calling Gemini API: ${err.message || err}`;
-        }
-      } else {
-        replyText = `🤖 Mock Bot Reply: You sent "${text}". Webhook is functional, but GEMINI_API_KEY is not set on Vercel yet!`;
-      }
+      replyText = `⚠️ Lo siento, solo puedo procesar y registrar transacciones financieras. Por favor envía mensajes como "Jitomate 5" o "Gaste $10 en gasolina".`;
     }
 
     // Send the reply back to the Telegram chat
