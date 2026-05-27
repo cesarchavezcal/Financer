@@ -1,3 +1,4 @@
+import { after } from "next/server";
 import { bot } from "../../../lib/bot";
 
 export const maxDuration = 30;
@@ -32,8 +33,9 @@ export async function GET(req: Request) {
 
       const data = await response.json();
       return Response.json({ success: true, webhookUrl, telegramResponse: data });
-    } catch (err: any) {
-      return Response.json({ success: false, error: err.message }, { status: 500 });
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      return Response.json({ success: false, error: errorMessage }, { status: 500 });
     }
   }
 
@@ -45,10 +47,15 @@ export async function GET(req: Request) {
 
 export async function POST(req: Request) {
   try {
-    return await bot.webhooks.telegram(req);
-  } catch (error: any) {
+    return await bot.webhooks.telegram(req, {
+      waitUntil: (promise) => {
+        after(() => promise);
+      },
+    });
+  } catch (error: unknown) {
     console.error("Telegram Webhook Error:", error);
+    const errorMessage = error instanceof Error ? error.message : String(error);
     // Return 200 OK so Telegram doesn't retry failed webhook deliveries indefinitely
-    return Response.json({ ok: false, error: error.message }, { status: 200 });
+    return Response.json({ ok: false, error: errorMessage }, { status: 200 });
   }
 }

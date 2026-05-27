@@ -1,4 +1,4 @@
-import { Chat } from "chat";
+import { Chat, Thread, Message } from "chat";
 import { createTelegramAdapter } from "@chat-adapter/telegram";
 import { createMemoryState } from "@chat-adapter/state-memory";
 import { classifyTransaction } from "./classifier";
@@ -15,9 +15,11 @@ export const bot = new Chat({
   state: createMemoryState(),
 });
 
-async function handleIncomingMessage(thread: any, message: any) {
+async function handleIncomingMessage(thread: Thread, message: Message) {
   const text = message.text || "";
   if (!text.trim()) return;
+
+  await thread.startTyping();
 
   try {
     const classification = await classifyTransaction(text);
@@ -35,10 +37,11 @@ async function handleIncomingMessage(thread: any, message: any) {
       const fallbackText = `⚠️ Lo siento, solo puedo procesar y registrar transacciones financieras. Por favor envía mensajes como "Jitomate 5" o "Gaste $10 en gasolina".`;
       await thread.post(fallbackText);
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Error processing message in bot handler:", error);
     try {
-      await thread.post(`❌ Error processing message: ${error.message || String(error)}`);
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      await thread.post(`❌ Error processing message: ${errorMessage}`);
     } catch (sendErr) {
       console.error("Failed to post error message back to thread:", sendErr);
     }

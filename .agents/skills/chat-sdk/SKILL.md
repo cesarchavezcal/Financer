@@ -187,3 +187,8 @@ A custom adapter needs request verification, webhook parsing, message/thread/cha
 ## Webhook setup
 
 Each registered adapter exposes `bot.webhooks.<name>`. Wire those directly to your HTTP framework routes. See `node_modules/chat/resources/guides/how-to-build-a-slack-bot-with-next-js-and-redis.md` and `node_modules/chat/resources/guides/create-a-discord-support-bot-with-nuxt-and-redis.md` for framework-specific route patterns.
+
+## Relations to Other Skills
+
+- **Supabase**: Use the [Supabase Skill](file:///Users/cesaradalbertochavezcalderon/Projects/Financer/.agents/skills/supabase/SKILL.md) to manage auth sessions, database transactions, or RLS policies within the Chat SDK event handlers.
+- **Vercel Functions**: Use the [Vercel Functions Skill](file:///Users/cesaradalbertochavezcalderon/Projects/Financer/.agents/skills/vercel-functions/SKILL.md) when deploying Chat SDK webhooks, managing serverless/edge runtimes, concurrency limits, or setting up background tasks via `waitUntil` or `after`.

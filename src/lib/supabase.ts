@@ -55,8 +55,9 @@ export async function insertMovements(transactions: Transaction[], metadata?: Mo
 
     console.log(`[Supabase] Successfully saved ${dbRows.length} movements.`);
     return { success: true, data };
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error("Unexpected error inserting movements:", err);
-    return { success: false, error: err.message || String(err) };
+    const errorMessage = err instanceof Error ? err.message : String(err);
+    return { success: false, error: errorMessage };
   }
 }

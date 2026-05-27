@@ -130,3 +130,9 @@ Do NOT use `apply_migration` to change a local database schema — it writes a m
 
 - **Skill Feedback** → [references/skill-feedback.md](references/skill-feedback.md)
   **MUST read when** the user reports that this skill gave incorrect guidance or is missing information.
+
+## Relations to Other Skills
+
+- **Chat SDK**: Use the [Chat SDK Skill](file:///Users/cesaradalbertochavezcalderon/Projects/Financer/.agents/skills/chat-sdk/SKILL.md) to integrate Supabase CRUD operations inside message, reaction, action, or slash command event handlers.
+- **Vercel Functions**: Use the [Vercel Functions Skill](file:///Users/cesaradalbertochavezcalderon/Projects/Financer/.agents/skills/vercel-functions/SKILL.md) to set up connection pooling, keep execution duration optimized, or run asynchronous database tasks in the background using `waitUntil` or `after`.
+

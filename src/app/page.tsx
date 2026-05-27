@@ -179,7 +179,7 @@ GEMINI_API_KEY=your_gemini_api_key`}
             <div style={{ borderTop: "1px solid var(--border-color)", paddingTop: "0.75rem" }}>
               <code style={{ color: "#34d399", fontWeight: "bold" }}>GET /api/telegram?setup=true</code>
               <p style={{ fontSize: "0.85rem", color: "--text-secondary", marginTop: "0.25rem" }}>
-                Registers this deployment's URL as the active Telegram webhook handler.
+                Registers this deployment&apos;s URL as the active Telegram webhook handler.
               </p>
             </div>
           </div>

@@ -412,3 +412,9 @@ Cold start latency > 1s?
 - [Streaming](https://vercel.com/docs/functions/streaming)
 - [Cron Jobs](https://vercel.com/docs/cron-jobs)
 - [GitHub: Vercel](https://github.com/vercel/vercel)
+
+## Relations to Other Skills
+
+- **Chat SDK**: Use the [Chat SDK Skill](file:///Users/cesaradalbertochavezcalderon/Projects/Financer/.agents/skills/chat-sdk/SKILL.md) to build bot integrations, route mentions/slash commands, and format JSX cards/modals from within Vercel API routes.
+- **Supabase**: Use the [Supabase Skill](file:///Users/cesaradalbertochavezcalderon/Projects/Financer/.agents/skills/supabase/SKILL.md) to manage client instances, enforce RLS policies, use Supabase CLI, or perform schema migrations when connecting database clients from Vercel Serverless or Edge functions.
+
